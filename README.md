@@ -1,14 +1,14 @@
-# cache_transformer_activations
+# activation_store
 
-Utility library to collect transformer activations **on disk**.
+Utility library to persistently store transformer activations on disk.
 
-These activations can be quite large (layers x batch x sequence x hidden_size), so it's nice to store it on disk and avoid and out of memory error.
+These activations can be quite large (layers x batch x sequence x hidden_size), so storing them on disk helps avoid out of memory errors.
 
-Install using `pip install git+https://github.com/wassname/cache_transformer_activations.git`.
+Install using `pip install git+https://github.com/wassname/activation_store.git`.
 
 ## Development
 ```
-git clone https//github.com/wassname/cache_transformer_activations.git
+git clone https//github.com/wassname/activation_store.git
 uv sync
 ```
 

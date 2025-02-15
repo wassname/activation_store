@@ -1,13 +1,14 @@
 [project]
-name = "cache-transformer-acts"
+name = "activation_store"
 version = "0.1.0"
-description = "Add your description here"
+description = "Cache transformer activations to disk"
 readme = "README.md"
 authors = [
     { name = "wassname", email = "1103714+wassname@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "accelerate>=1.3.0",
     "baukit",
     "datasets>=3.3.0",
     "einops>=0.8.1",
