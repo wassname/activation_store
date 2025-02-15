@@ -1,0 +1,32 @@
+[project]
+name = "cache-transformer-acts"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "wassname", email = "1103714+wassname@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "baukit",
+    "datasets>=3.3.0",
+    "einops>=0.8.1",
+    "jaxtyping>=0.2.38",
+    "loguru>=0.7.3",
+    "torch>=2.6.0",
+    "tqdm>=4.67.1",
+    "transformers>=4.48.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+baukit = { git = "https://github.com/davidbau/baukit.git" }
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.5",
+]
