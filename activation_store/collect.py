@@ -53,13 +53,24 @@ def dataset_hash(**kwargs):
     return suffix
 
 
-def collect_act_to_disk(loader: DataLoader, model: AutoModelForCausalLM, dataset_name='', layers=[], dataset_dir=default_output_folder, writer_batch_size=1):
+def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_name='', layers=[], dataset_dir=default_output_folder, writer_batch_size=1, postprocess_result=default_postprocess_result) -> Dataset:
+    """
+    Collect activations from a model and store them in a dataset
+
+    Args:
+    - loader: DataLoader
+    - model: AutoModelForCausalLM
+    - dataset_name: str
+    - layers: List[str] - selected from `model.named_modules()`
+    - dataset_dir: Path
+    - postprocess_result: Callable - see `default_postprocess_result` for signature
+    """
     hash = dataset_hash(generate_batches=generate_batches, loader=loader, model=model)
     f = dataset_dir / ".ds" / f"ds_{dataset_name}_{hash}"
     f.parent.mkdir(exist_ok=True, parents=True)
     logger.info(f"creating dataset {f}")
 
-    iterator = generate_batches(loader, model, layers=layers)
+    iterator = generate_batches(loader, model, layers=layers, postprocess_result=postprocess_result)
     with ArrowWriter(path=f, writer_batch_size=writer_batch_size) as writer: 
         for bo in iterator:
 
