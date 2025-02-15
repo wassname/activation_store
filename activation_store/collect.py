@@ -7,7 +7,7 @@ from loguru import logger
 from pathlib import Path
 from baukit.nethook import TraceDict, recursive_copy
 from einops import rearrange
-from datasets.arrow_writer import ArrowWriter 
+from datasets.arrow_writer import ArrowWriter, ParquetWriter
 from datasets.fingerprint import Hasher
 from transformers.modeling_outputs import ModelOutput
 
@@ -15,15 +15,15 @@ from activation_store.helpers.torch import clear_mem
 from typing import Dict, Generator
 from torch import Tensor
 
-default_output_folder = (Path(__file__).parent.parent.parent / "outputs").resolve()
+default_output_folder = (Path(__file__).parent.parent / "outputs").resolve()
 
-def default_postprocess_result(input: dict, ret: TraceDict, output: ModelOutput) -> Dict[str, Tensor]:
-    """add ret, activations to output"""
+def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput) -> Dict[str, Tensor]:
+    """add activations to output, and rearrange hidden states"""
 
     # Baukit records the literal layer output, which varies by model. Here we assume that the output or the first part are activations we want
     acts = {f'act-{k}': 
             v.output[0] if isinstance(v.output, tuple) else v.output
-            for k, v in ret.items()}
+            for k, v in trace.items()}
     
     output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h')
 
@@ -33,17 +33,16 @@ def default_postprocess_result(input: dict, ret: TraceDict, output: ModelOutput)
 @torch.no_grad
 def generate_batches(loader: DataLoader, model: AutoModelForCausalLM, layers, postprocess_result=default_postprocess_result) -> Generator[Dict[str, Tensor], None, None]:
     model.eval()
-    for batch in tqdm(loader, 'collecting hidden states'):
+    for batch in tqdm(loader, 'collecting activations'):
         device = next(model.parameters()).device
-        b_in = {
-            k: v.to(device)
-            for k, v in batch.items()
-        }
-        with TraceDict(model, layers) as ret:
-            out = model(**b_in, use_cache=False, output_hidden_states=True, return_dict=True)
-        o = postprocess_result(batch, ret, out)
+        with torch.amp.autocast(device_type=device.type):
+            with TraceDict(model, layers) as trace:
+                out = model(**batch, use_cache=False, output_hidden_states=True, return_dict=True)
+        o = postprocess_result(batch, trace, out)
+
+        # copy to avoid memory leaks
         o = recursive_copy(o)
-        out = ret = b_in = None
+        out = trace = batch = None
         clear_mem()
         yield o
 
@@ -64,22 +63,33 @@ def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_na
     - layers: List[str] - selected from `model.named_modules()`
     - dataset_dir: Path
     - postprocess_result: Callable - see `default_postprocess_result` for signature
+
+    Returns:
+    - file
+
+    Usage:
+        f = activation_store(loader, model, layers=['transformer.h'])
+        Dataset.from_parquet(f)
     """
     hash = dataset_hash(generate_batches=generate_batches, loader=loader, model=model)
-    f = dataset_dir / ".ds" / f"ds_{dataset_name}_{hash}"
+    f = dataset_dir / ".ds" / f"ds_{dataset_name}_{hash}.parquet"
     f.parent.mkdir(exist_ok=True, parents=True)
     logger.info(f"creating dataset {f}")
 
-    iterator = generate_batches(loader, model, layers=layers, postprocess_result=postprocess_result)
-    with ArrowWriter(path=f, writer_batch_size=writer_batch_size) as writer: 
+    iterator = generate_batches(loader, model, layers=layers, postprocess_result=postprocess_result) 
+
+    with ParquetWriter(path=f, writer_batch_size=writer_batch_size,
+                       embed_local_files=True
+                       ) as writer: 
         for bo in iterator:
 
             bs = len(next(iter(bo.values())))
             assert all(len(v) == bs for v in bo.values()), f"must return Dict[str,Tensor] and all tensors with same batch size a first dimension"
 
+            # or maybe better compression to `writer.write(example, key)` for each
             writer.write_batch(bo)
-        writer.write_examples_on_file()
         writer.finalize() 
+        writer.close()
     
-    ds = Dataset.from_file(str(f)).with_format("torch")
-    return ds, f
+    # ds = Dataset.from_file(str(f)).with_format("torch")
+    return f
