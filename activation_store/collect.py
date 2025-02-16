@@ -17,7 +17,7 @@ from torch import Tensor
 
 default_output_folder = (Path(__file__).parent.parent / "outputs").resolve()
 
-def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput) -> Dict[str, Tensor]:
+def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM) -> Dict[str, Tensor]:
     """add activations to output, and rearrange hidden states"""
 
     # Baukit records the literal layer output, which varies by model. Here we assume that the output or the first part are activations we want
@@ -27,7 +27,7 @@ def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutpu
     
     output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h')
 
-    return dict(**acts, **output)
+    return dict(attention_mask=input["attention_mask"], **acts, **output)
 
 
 @torch.no_grad
@@ -38,9 +38,10 @@ def generate_batches(loader: DataLoader, model: AutoModelForCausalLM, layers, po
         with torch.amp.autocast(device_type=device.type):
             with TraceDict(model, layers) as trace:
                 out = model(**batch, use_cache=False, output_hidden_states=True, return_dict=True)
-        o = postprocess_result(batch, trace, out)
+        o = postprocess_result(batch, trace, out, model)
 
         # copy to avoid memory leaks
+        o = {k: v.to('cpu') if isinstance(v, Tensor) else v for k, v in o.items()}
         o = recursive_copy(o)
         out = trace = batch = None
         clear_mem()
@@ -69,7 +70,7 @@ def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_na
 
     Usage:
         f = activation_store(loader, model, layers=['transformer.h'])
-        Dataset.from_parquet(f)
+        Dataset.from_parquet(f).with_format("torch")
     """
     hash = dataset_hash(generate_batches=generate_batches, loader=loader, model=model)
     f = dataset_dir / ".ds" / f"ds_{dataset_name}_{hash}.parquet"
@@ -84,12 +85,11 @@ def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_na
         for bo in iterator:
 
             bs = len(next(iter(bo.values())))
-            assert all(len(v) == bs for v in bo.values()), f"must return Dict[str,Tensor] and all tensors with same batch size a first dimension"
+            assert all(len(v) == bs for v in bo.values()), "must return Dict[str,Tensor] and all tensors with same batch size a first dimension"
 
             # or maybe better compression to `writer.write(example, key)` for each
             writer.write_batch(bo)
         writer.finalize() 
         writer.close()
     
-    # ds = Dataset.from_file(str(f)).with_format("torch")
     return f
