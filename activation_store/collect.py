@@ -107,6 +107,9 @@ def generate_batches(
                 print('o', k, type(o[k]))
         o = {k: to_cpu(v) for k, v in o.items()}
         o = recursive_copy(o, clone=True, detach=True)
+
+        from datasets.features.features import cast_to_python_objects
+        o = cast_to_python_objects(o, only_1d_for_numpy=False, optimize_list_casting=False)
         out = trace = batch = None
         clear_mem()
         yield o
