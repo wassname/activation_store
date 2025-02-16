@@ -12,4 +12,11 @@ git clone https//github.com/wassname/activation_store.git
 uv sync
 ```
 
-see exampes in `nbs` folder.
+see examples in `nbs` folder.
+
+
+## TODO:
+
+- [x] test compression: it's not worth the complexity
+- [x] examples
+- [ ] generate and collect activations
