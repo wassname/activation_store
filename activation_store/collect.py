@@ -18,14 +18,15 @@ from torch import Tensor
 default_output_folder = (Path(__file__).parent.parent / "outputs").resolve()
 
 def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM) -> Dict[str, Tensor]:
-    """add activations to output, and rearrange hidden states"""
+    """Make your own. This adds activations to output, and rearranges hidden states"""
 
     # Baukit records the literal layer output, which varies by model. Here we assume that the output or the first part are activations we want
     acts = {f'act-{k}': 
             v.output[0] if isinstance(v.output, tuple) else v.output
             for k, v in trace.items()}
     
-    output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h')
+    # batch must be first, also the writer supports float16 so lets use that
+    output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h').half()
 
     return dict(attention_mask=input["attention_mask"], **acts, **output)
 
