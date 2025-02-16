@@ -20,20 +20,12 @@ dependencies = [
     "transformers>=4.48.3",
 ]
 
-# [build-system]
-# requires = ["hatchling"]
-# build-backend = "hatchling.build"
-
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["activation_store"]
-
-# [build-system]
-# requires = ["flit_core>=3.2,<4"]
-# build-backend = "flit_core.buildapi"
 
 [tool.uv.sources]
 baukit = { git = "https://github.com/davidbau/baukit.git" ,  rev = "9d51abd51ebf29769aecc38c4cbef459b731a36e" }
