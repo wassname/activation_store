@@ -28,7 +28,12 @@ def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutpu
     # batch must be first, also the writer supports float16 so lets use that
     output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h').half()
 
-    return dict(attention_mask=input["attention_mask"], **acts, **output)
+    o = dict(**acts, **output)
+    if 'attention_mask' in input:
+        o['attention_mask'] = input['attention_mask']
+    if 'label' in input:
+        o['label'] = input['label']
+    return o
 
 
 @torch.no_grad
