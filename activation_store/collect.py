@@ -17,7 +17,7 @@ from torch import Tensor
 default_output_folder = (Path(__file__).parent.parent / "outputs").resolve()
 
 @torch.no_grad()
-def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM, last_token=False, dtype=torch.float16) -> Dict[str, Tensor]:
+def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM, last_token=True, dtype=torch.float16) -> Dict[str, Tensor]:
     """Make your own. This adds activations to output, and rearranges hidden states.
 
     Note the parquet write support float16, so we use that. It does not support float8, bfloat16, etc.
