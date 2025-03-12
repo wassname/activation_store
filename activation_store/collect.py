@@ -17,18 +17,25 @@ from torch import Tensor
 default_output_folder = (Path(__file__).parent.parent / "outputs").resolve()
 
 @torch.no_grad()
-def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM, last_token=False) -> Dict[str, Tensor]:
-    """Make your own. This adds activations to output, and rearranges hidden states"""
-    token_index = -1 if last_token else slice(None)
+def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM, last_token=False, dtype=torch.float16) -> Dict[str, Tensor]:
+    """Make your own. This adds activations to output, and rearranges hidden states.
+
+    Note the parquet write support float16, so we use that. It does not support float8, bfloat16, etc.
+
+    Often you only want the last token, which makes things smaller and easily stackable.
+    
+    """
+    token_index = slice(-1, None) if last_token else slice(None)
 
     # Baukit records the literal layer output, which varies by model. Here we assume that the output or the first part are activations we want
+    # usually [b, t, h] but it depends on the model
     acts = {f'act-{k}': 
-            v.output[0][:, token_index] if isinstance(v.output, tuple) else v.output
+            v.output[0][:, token_index].to(dtype) if isinstance(v.output, tuple) else v.output
             for k, v in trace.items()}
     del trace
     
     # batch must be first, also the writer supports float16 so lets use that
-    output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h')[:, token_index].half()
+    output.hidden_states = rearrange(list(output.hidden_states), 'l b t h -> b l t h')[:, :, token_index].to(dtype)
 
     o = dict(**acts, **output)
     if ('attention_mask' in input) and not last_token:
