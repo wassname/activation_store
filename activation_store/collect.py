@@ -2,6 +2,7 @@ from transformers import AutoModelForCausalLM
 import torch
 from datasets import Dataset
 from tqdm.auto import tqdm
+import itertools
 from torch.utils.data import DataLoader
 from loguru import logger
 from pathlib import Path
@@ -11,13 +12,14 @@ from datasets.arrow_writer import ArrowWriter, ParquetWriter
 from datasets.fingerprint import Hasher
 from transformers.modeling_outputs import ModelOutput
 from activation_store.helpers.torch import clear_mem
-from typing import Dict, Generator
+from typing import Dict, Generator, List, Union, Optional
 from torch import Tensor
+import os
 
 default_output_folder = (Path(__file__).parent.parent / "outputs").resolve()
 
 @torch.no_grad()
-def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM, last_token=True, dtype=torch.float16) -> Dict[str, Tensor]:
+def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutput, model: AutoModelForCausalLM, act_groups=Optional[Dict[str,List[str]]], last_token=True, dtype=torch.float16) -> Dict[str, Tensor]:
     """Make your own. This adds activations to output, and rearranges hidden states.
 
     Note the parquet write support float16, so we use that. It does not support float8, bfloat16, etc.
@@ -27,12 +29,15 @@ def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutpu
     """
     token_index = slice(-1, None) if last_token else slice(None)
 
-    # Baukit records the literal layer output, which varies by model. Here we assume that the output or the first part are activations we want
-    # usually [b, t, h] but it depends on the model
-    try:
-        acts = {'acts': torch.stack([v.output[0][:, token_index].to(dtype) if isinstance(v.output, tuple) else v.output[:, token_index] for k, v in trace.items()], dim=1)}
-    except Exception as e:
-        logger.error(f"failed to stack activations: {e}")            
+    # Baukit records the literal layer output, which varies by model. Sometimes you get a tuple, or not.Usually [b, t, h] for MLP, but not for attention layers. You may need to customize this.
+    if act_groups is not None:
+        acts = {}
+        for k, group in act_groups.items():
+            aas = [v.output[0] if isinstance(v.output, tuple) else v.output for k, v in trace.items() if k in group]
+            assert len(aas) > 0, f"no activations found for {group}"
+            aas = torch.stack([a[:, token_index].to(dtype) for a in aas], dim=1)
+            acts[k] = aas
+    else:
         acts = {f'act-{k}': 
                 v.output[0][:, token_index].to(dtype) if isinstance(v.output, tuple) else v.output[:, token_index]
                 for k, v in trace.items()}
@@ -49,7 +54,7 @@ def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutpu
     if 'label' in input:
         o['label'] = input['label']
 
-    # convert any 0d tensors like loss to 1d, by repeating along batch dimension
+    # all output tensors must have a batch dim
     for k, v in o.items():
         if v.dim() == 0:
             bs = input['input_ids'].shape[0]
@@ -58,7 +63,26 @@ def default_postprocess_result(input: dict, trace: TraceDict, output: ModelOutpu
 
 
 @torch.no_grad
-def generate_batches(loader: DataLoader, model: AutoModelForCausalLM, layers, postprocess_result=default_postprocess_result) -> Generator[Dict[str, Tensor], None, None]:
+def generate_batches(loader: DataLoader, model: AutoModelForCausalLM, layers = [], postprocess_result=default_postprocess_result) -> Generator[Dict[str, Tensor], None, None]:
+    """
+    Collect activations from a model
+
+    Args:
+    - loader: DataLoader
+    - model: AutoModelForCausalLM
+    - layers: can be
+        - selected from `model.named_modules()`
+        - groups of layers to collect, these will be stacked so they must have compatible sizes
+    - postprocess_result: Callable - see `default_postprocess_result` for signature
+
+    Returns:
+    - Generator of [Dict[str, Tensor]], where each tensor has shape [batch,...]
+    """
+    act_groups = None
+    if isinstance(layers, dict):
+        act_groups = layers
+        layers = list(itertools.chain(*layers.values()))
+    
     model.eval()
     for batch in tqdm(loader, 'collecting activations'):
         device = next(model.parameters()).device
@@ -68,7 +92,7 @@ def generate_batches(loader: DataLoader, model: AutoModelForCausalLM, layers, po
             batch = {k: v.to(device) if isinstance(v, Tensor) else v for k, v in batch.items()}
             with TraceDict(model, layers, retain_grad=False, detach=True, clone=True) as trace:
                 out = model(**batch, use_cache=False, output_hidden_states=True, return_dict=True)
-        o = postprocess_result(batch, trace, out, model)
+        o = postprocess_result(batch, trace, out, model, act_groups=act_groups)
 
         # copy to avoid memory leaks
         o = {k: v.to('cpu') if isinstance(v, Tensor) else v for k, v in o.items()}
@@ -83,7 +107,7 @@ def dataset_hash(**kwargs):
     return suffix
 
 
-def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_name='', layers=[], dataset_dir=default_output_folder, writer_batch_size=1, postprocess_result=default_postprocess_result) -> Dataset:
+def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_name='', layers: Union[List[str], Dict[str, List[str]]]=[], dataset_dir=default_output_folder, writer_batch_size=1, postprocess_result=default_postprocess_result) -> Dataset:
     """
     Collect activations from a model and store them in a dataset
 
@@ -91,7 +115,9 @@ def activation_store(loader: DataLoader, model: AutoModelForCausalLM, dataset_na
     - loader: DataLoader
     - model: AutoModelForCausalLM
     - dataset_name: str
-    - layers: List[str] - selected from `model.named_modules()`
+    - layers: 
+        - List[str]  selected from `model.named_modules()`
+        - or Dict[str, List[str]]] - groups of layers to collect, these will be stacked so they must have compatible sizes
     - dataset_dir: Path
     - postprocess_result: Callable - see `default_postprocess_result` for signature
 
