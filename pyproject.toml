@@ -27,7 +27,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["activation_store"]
+packages = ["activation_store", "activation_store.*"]
 
 [tool.uv.sources]
 baukit = { git = "https://github.com/davidbau/baukit.git" ,  rev = "9d51abd51ebf29769aecc38c4cbef459b731a36e" }
