@@ -11,15 +11,15 @@ keywords = ["transformers", "cache", "activations", "huggingface"]
 requires-python = ">=3.10"
 dependencies = [
     "baukit",
-    "datasets>=3.3.0",
-    "einops>=0.8.1",
-    "jaxtyping>=0.2.38",
-    "loguru>=0.7.3",
-    "matplotlib>=3.10.0",
-    "skorch>=1.1.0",
-    "torch>=2.6.0",
-    "tqdm>=4.67.1",
-    "transformers>=4.48.3",
+    "datasets>=3.3",
+    "einops>=0.8",
+    "jaxtyping>=0.2",
+    "loguru>=0.7",
+    "matplotlib>=3.10",
+    "skorch>=1.1",
+    "torch>=2.6",
+    "tqdm>=4.67",
+    "transformers>=4.48",
 ]
 
 
