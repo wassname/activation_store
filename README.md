@@ -9,6 +9,38 @@ Install using
 pip install git+https://github.com/wassname/activation_store.git
 ```
 
+Example
+```py
+layer_groups = {'mlp.down_proj': [
+  'model.layers.21.mlp.down_proj',
+  'model.layers.22.mlp.down_proj',
+  'model.layers.23.mlp.down_proj'],
+ 'self_attn': [
+  'model.layers.21.self_attn',
+  'model.layers.22.self_attn',
+  'model.layers.23.self_attn'],
+ 'mlp.up_proj': [
+  'model.layers.21.mlp.up_proj',
+  'model.layers.22.mlp.up_proj',
+  'model.layers.23.mlp.up_proj']}
+
+# collect activations into a huggingface dataset
+f = activation_store(ds, model, layers=layer_groups)
+f
+# > Generating train split: 0 examples [00:00, ? examples/s]
+# Dataset({
+#    features: ['mlp.down_proj', 'self_attn', 'mlp.up_proj', 'loss', 'logits', 'hidden_states'],
+#    num_rows: 20
+# })
+
+# it has this sgaoe
+ds_a = Dataset.from_parquet(str(f)).with_format("torch")
+ds_a[0:2]['hidden_states'].shape # [batch, layers, tokens, hidden_states]
+# torch.Size([2, 25, 1, 896])
+
+```
+
+
 ## Development
 ```
 git clone https//github.com/wassname/activation_store.git
