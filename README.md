@@ -33,7 +33,7 @@ f
 #    num_rows: 20
 # })
 
-# it has this sgaoe
+# it has this shape
 ds_a = Dataset.from_parquet(str(f)).with_format("torch")
 ds_a[0:2]['hidden_states'].shape # [batch, layers, tokens, hidden_states]
 # torch.Size([2, 25, 1, 896])
