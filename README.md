@@ -1,15 +1,20 @@
 # activation_store
 
-Utility library to persistently store transformer activations on disk.
+Utility library to persistently store transformer activations on disk as huggingface dataset.
 
-These activations can be quite large (layers x batch x sequence x hidden_size), so generating them to disk helps avoid out of memory errors.
+As these activations can be quite large (layers x batch x sequence x hidden_size), generating them to disk helps avoid out of memory errors.
 
-Install using 
+Install using
 ```
 pip install git+https://github.com/wassname/activation_store.git
 ```
 
-Example
+
+## Examples
+
+Full examples can be found in the [nbs folder](./nbs).
+
+
 ```py
 layer_groups = {'mlp.down_proj': [
   'model.layers.21.mlp.down_proj',
@@ -25,7 +30,7 @@ layer_groups = {'mlp.down_proj': [
   'model.layers.23.mlp.up_proj']}
 
 # collect activations into a huggingface dataset
-f = activation_store(ds, model, layers=layer_groups)
+f = activation_store(loader=ds, model=model, layers=layer_groups)
 f
 # > Generating train split: 0 examples [00:00, ? examples/s]
 # Dataset({
@@ -33,7 +38,7 @@ f
 #    num_rows: 20
 # })
 
-# it has this sgaoe
+# it has this shape
 ds_a = Dataset.from_parquet(str(f)).with_format("torch")
 ds_a[0:2]['hidden_states'].shape # [batch, layers, tokens, hidden_states]
 # torch.Size([2, 25, 1, 896])
@@ -46,9 +51,6 @@ ds_a[0:2]['hidden_states'].shape # [batch, layers, tokens, hidden_states]
 git clone https//github.com/wassname/activation_store.git
 uv sync
 ```
-
-see examples in `nbs` folder.
-
 
 ## TODO:
 
