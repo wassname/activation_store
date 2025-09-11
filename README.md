@@ -30,7 +30,7 @@ layer_groups = {'mlp.down_proj': [
   'model.layers.23.mlp.up_proj']}
 
 # collect activations into a huggingface dataset
-f = activation_store(ds, model, layers=layer_groups)
+f = activation_store(loader=ds, model=model, layers=layer_groups)
 f
 # > Generating train split: 0 examples [00:00, ? examples/s]
 # Dataset({
