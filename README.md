@@ -1,10 +1,10 @@
 # activation_store
 
-Utility library to persistently store transformer activations on disk.
+Utility library to persistently store transformer activations on disk as huggingface dataset.
 
-These activations can be quite large (layers x batch x sequence x hidden_size), so generating them to disk helps avoid out of memory errors.
+As these activations can be quite large (layers x batch x sequence x hidden_size), generating them to disk helps avoid out of memory errors.
 
-Install using 
+Install using
 ```
 pip install git+https://github.com/wassname/activation_store.git
 ```
