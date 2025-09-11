@@ -9,7 +9,12 @@ Install using
 pip install git+https://github.com/wassname/activation_store.git
 ```
 
-Example
+
+## Examples
+
+Full examples can be found in the [nbs folder](./nbs).
+
+
 ```py
 layer_groups = {'mlp.down_proj': [
   'model.layers.21.mlp.down_proj',
@@ -46,9 +51,6 @@ ds_a[0:2]['hidden_states'].shape # [batch, layers, tokens, hidden_states]
 git clone https//github.com/wassname/activation_store.git
 uv sync
 ```
-
-see examples in `nbs` folder.
-
 
 ## TODO:
 
